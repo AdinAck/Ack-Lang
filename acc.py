@@ -55,8 +55,7 @@ class Compiler:
         # wrap-up
         for var in self.memory_map:
             if (reg := self.reg_of(var)):
-                self.wrap_up.append(f'// store {var}')
-                self.wrap_up.append(f'stur x{reg}, [sp, #{self.memory_map[self.register_map[reg]]}]')
+                self.write(self.wrap_up, f'stur x{reg}, [sp, #{self.memory_map[self.register_map[reg]]}]', f'store {var}')
         
         # write out
         with open(filename, 'w') as f:
@@ -100,6 +99,13 @@ class Compiler:
 
         return None
     
+    def is_int(self, symbol: str) -> bool:
+        try:
+            int(symbol)
+            return True
+        except:
+            return False
+    
     def assign(self, var: Variable, iterator: Generator):
         operator: Operator = next(iterator)
         
@@ -127,7 +133,7 @@ class Compiler:
             
             comment = f'{var.symbol} = {postfix[0]}'
             if (x := int(postfix[0])) < 0:
-                self.write(self.body, f'\nsubi x{reg}, xzr, #{-x}', comment)
+                self.write(self.body, f'subi x{reg}, xzr, #{-x}', comment)
             else:
                 self.write(self.body, f'addi x{reg}, xzr, #{x}', comment)
                 
@@ -179,31 +185,56 @@ class Compiler:
         
         comment = f'{a+b+op} = {a} {op} {b}'
         
-        if not a.isdigit() and not b.isdigit(): # both in registers
+        if not self.is_int(a) and not self.is_int(b): # both in registers
             self.write(self.body, f'{instruction} x{reg}, x{self.reg_of(a)}, x{self.reg_of(b)}', comment)
-        elif not a.isdigit(): # b is literal
-            if instruction != 'mul':
-                self.body.append(f'{instruction}i x{reg}, x{self.reg_of(a)}, #{b}')
+        elif not self.is_int(a): # b is literal
+            if instruction == 'add':
+                if (x := int(b)) < 0:
+                    self.write(self.body, f'subi x{reg}, x{self.reg_of(a)}, #{-x}', comment)
+                else:
+                    self.write(self.body, f'addi x{reg}, x{self.reg_of(a)}, #{x}', comment)
+            elif instruction == 'sub':
+                if (x := int(b)) < 0:
+                    self.write(self.body, f'addi x{reg}, x{self.reg_of(a)}, #{-x}', comment)
+                else:
+                    self.write(self.body, f'subi x{reg}, x{self.reg_of(a)}, #{x}', comment)
+            elif instruction == 'mul':
+                if (x := int(b)) < 0:
+                    self.write(self.body, f'subi x{reg}, xzr, #{-x}', f'x{reg} = {x}')
+                else:
+                    self.write(self.body, f'addi x{reg}, xzr, #{x}', f'x{reg} = {x}')
+                
+                self.write(self.body, f'mul x{reg}, x{reg}, x{self.reg_of(a)}', comment)
             else:
-                self.body.append(f'addi x{reg}, xzr, #{b}')
-                self.body.append(f'mul x{reg}, x{reg}, x{self.reg_of(a)}')
-        elif not b.isdigit(): # a is literal
-            if instruction == 'sub': # special case for subtraction
-                self.body.append(f'addi x{reg}, xzr, #{a}')
-                self.body.append(f'sub x{reg}, x{reg}, x{self.reg_of(b)}')
-            elif instruction == 'add':
-                self.body.append(f'addi x{reg}, x{self.reg_of(b)}, #{a}')
+                raise NotImplementedError()
+        elif not self.is_int(b): # a is literal
+            if instruction == 'add':
+                if (x := int(a)) < 0:
+                    self.write(self.body, f'subi x{reg}, x{self.reg_of(b)}, #{-x}', comment)
+                else:
+                    self.write(self.body, f'addi x{reg}, x{self.reg_of(b)}, #{x}', comment)
+            elif instruction == 'sub':
+                if (x := int(a)) < 0:
+                    self.write(self.body, f'addi x{reg}, x{self.reg_of(b)}, #{-x}', comment)
+                else:
+                    self.write(self.body, f'subi x{reg}, x{self.reg_of(b)}, #{x}', comment)
+            elif instruction == 'mul':
+                if (x := int(a)) < 0:
+                    self.write(self.body, f'subi x{reg}, xzr, #{-x}', f'x{reg} = {x}')
+                else:
+                    self.write(self.body, f'addi x{reg}, xzr, #{x}', f'x{reg} = {x}')
+                
+                self.write(self.body, f'mul x{reg}, x{reg}, x{self.reg_of(b)}', comment)
             else:
-                self.body.append(f'addi x{reg}, xzr, #{a}')
-                self.body.append(f'mul x{reg}, x{reg}, x{self.reg_of(b)}')
+                raise NotImplementedError()
         else: # both are literal
             if instruction == 'sub': # special case for substitution
                 if (x := int(a) - int(b)) < 0:
-                    self.body.append(f'subi x{reg}, xzr, #{-x}')
+                    self.write(self.body, f'subi x{reg}, xzr, #{-x}', comment)
                 else:
-                    self.body.append(f'subi x{reg}, xzr, #{x}')
+                    self.write(self.body, f'subi x{reg}, xzr, #{x}', comment)
             elif instruction == 'add':
-                self.body.append(f'addi x{reg}, xzr, #{a + b}')
+                self.write(self.body, f'addi x{reg}, xzr, #{a + b}', comment)
             else:
                 raise NotImplementedError()
         
