@@ -1,22 +1,27 @@
 // a: 0
 // b: 8
 // c: 16
-// ab+: 24
 
-addi x11, xzr, #5	// a = 5
+subi sp, sp, #16	// allocate 16 bytes on the stack
 
-subi x12, xzr, #6	// b = -6
+addi x10, xzr, #5	// a = 5
 
-add x13, x11, x12	// ab+ = a + b
-subi x14, xzr, #2	// x14 = -2
-mul x14, x14, x13	// ab+-2* = ab+ * -2
-addi x15, x13, #3	// ab+3+ = ab+ + 3
-stur x11, [sp, #0]	// store a
-mul x11, x12, x15	// bab+3+* = b * ab+3+
-stur x12, [sp, #8]	// store b
-add x12, x14, x11	// ab+-2*bab+3+*+ = ab+-2* + bab+3+*
+subi x11, xzr, #6	// b = -6
 
-stur x13, [sp, #24]	// store ab+
-addi x13, x12, #2	// c2+ = c + 2
+add x12, x10, x11	// ab+ = a + b
+subi x13, xzr, #2	// x13 = -2
+mul x13, x13, x12	// ab+-2* = ab+ * -2
+addi x14, x12, #3	// ab+3+ = ab+ + 3
+mul x15, x11, x14	// bab+3+* = b * ab+3+
+stur x10, [sp, #0]	// store a
+add x10, x13, x15	// c = ab+-2* + bab+3+*
 
-stur x12, [sp, #16]	// store c
+stur x11, [sp, #8]	// store b
+addi x11, xzr, #2	// x11 = 2
+addi x9, xzr, #3	// x9 = 3
+mul x11, x11, x9	// 23* = 2 * 3
+add x10, x10, x11	// c = c + 23*
+
+stur x10, [sp, #16]	// store c
+
+addi sp, sp, #16	// deallocate 16 bytes from the stack

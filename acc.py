@@ -26,7 +26,7 @@ class Compiler:
         self.lexer = Lexer(filename)
         
         self.register_map = {}
-        self.register_counter = 11
+        self.register_counter = 10
         
         self.memory_map = {}
         self.memory_counter = 0
@@ -52,10 +52,20 @@ class Compiler:
         
         self.setup.append('')
         
+        stack_size: int = (self.memory_counter // 16) * 16
+        
+        self.write(self.setup, f'subi sp, sp, #{stack_size}', f'allocate {stack_size} bytes on the stack')
+        
+        self.setup.append('')
+        
         # wrap-up
         for var in self.memory_map:
             if (reg := self.reg_of(var)):
                 self.write(self.wrap_up, f'stur x{reg}, [sp, #{self.memory_map[self.register_map[reg]]}]', f'store {var}')
+        
+        self.wrap_up.append('')
+        
+        self.write(self.wrap_up, f'addi sp, sp, #{stack_size}', f'deallocate {stack_size} bytes from the stack')
         
         # write out
         with open(filename, 'w') as f:
@@ -81,7 +91,7 @@ class Compiler:
             self.register_map[reg] = var.symbol
             
             if self.register_counter >= 15: # wrap register_counter
-                self.register_counter = 11
+                self.register_counter = 10
             else:
                 self.register_counter += 1
         
@@ -138,10 +148,9 @@ class Compiler:
                 self.write(self.body, f'addi x{reg}, xzr, #{x}', comment)
                 
         else:
-            self.complex_assign(postfix)
-            self.register_map[self.register_counter - 1] = var.symbol
+            self.complex_assign(postfix, var)
     
-    def complex_assign(self, postfix: list[str]):
+    def complex_assign(self, postfix: list[str], target: Variable):
         if len(postfix) <= 2:
             return
         
@@ -166,11 +175,16 @@ class Compiler:
         else:
             raise NotImplementedError()
         
+        assigning: bool = len(postfix) == 1 # assigning to target
+        
+        if assigning: 
+            var = target
+        
         # determine which register contains the variable to be assigned to, and allocate a new register if need be
         reg, exists = self.allocate_register(var)
         
-        if exists:
-            self.complex_assign(postfix)
+        if exists and var != target:
+            self.complex_assign(postfix, target)
             return
         
         match op:
@@ -182,8 +196,11 @@ class Compiler:
                 instruction = 'mul'
             case _:
                 raise NotImplementedError()
-        
-        comment = f'{a+b+op} = {a} {op} {b}'
+                
+        if assigning:
+            comment = f'{var.symbol} = {a} {op} {b}'
+        else:
+            comment = f'{a+b+op} = {a} {op} {b}'
         
         if not self.is_int(a) and not self.is_int(b): # both in registers
             self.write(self.body, f'{instruction} x{reg}, x{self.reg_of(a)}, x{self.reg_of(b)}', comment)
@@ -234,11 +251,25 @@ class Compiler:
                 else:
                     self.write(self.body, f'subi x{reg}, xzr, #{x}', comment)
             elif instruction == 'add':
-                self.write(self.body, f'addi x{reg}, xzr, #{a + b}', comment)
+                if (x := int(a) + int(b)) < 0:
+                    self.write(self.body, f'subi x{reg}, xzr, #{-x}', comment)
+                else:
+                    self.write(self.body, f'addi x{reg}, xzr, #{x}', comment)
+            elif instruction == 'mul':
+                if (x := int(a)) < 0:
+                    self.write(self.body, f'subi x{reg}, xzr, #{-x}', f'x{reg} = {x}')
+                else:
+                    self.write(self.body, f'addi x{reg}, xzr, #{x}', f'x{reg} = {x}')
+                if (y := int(b)) < 0:
+                    self.write(self.body, f'subi x9, xzr, #{-y}', f'x9 = {y}')
+                else:
+                    self.write(self.body, f'addi x9, xzr, #{y}', f'x9 = {y}')
+                    
+                self.write(self.body, f'mul x{reg}, x{reg}, x9', comment)
             else:
                 raise NotImplementedError()
         
-        self.complex_assign(postfix)
+        self.complex_assign(postfix, target)
         
     def instantiate(self, type: Type, iterator: Generator):
         if type.symbol == 'long':
@@ -249,28 +280,8 @@ class Compiler:
             # update tracking
             self.memory_map[var.symbol] = self.memory_counter
             self.memory_counter += 8
-            
-            # value: Variable | Literal = next(iterator)
-            
-            # # synthesis
-            
-            # self.body.append(f'// {type} {name} = {value}')
-            
-            # if isinstance(value, Literal):
-            #     # load x8 with value
-            #     self.body.append(f'addi x8, xzr, #{value.value}')
-                
-            #     # store into memory at location of variable
-            #     self.body.append(f'stur x8, [sp, #{self.memory_counter}]')
-            # elif isinstance(value, Variable):
-            #     # retreive value
-            #     self.body.append(f'ldur x12, [sp, #{self.memory_map[value.symbol]}]')
-                
-            #     # store into new variable location
-            #     self.body.append(f'stur x12, [sp, #{self.memory_counter}]')
-        
-            # self.body.append('')
-        
+        else:
+            raise NotImplementedError()
             
 if __name__ == '__main__':
     c = Compiler('example.ack')
