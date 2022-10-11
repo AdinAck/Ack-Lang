@@ -198,9 +198,9 @@ class Compiler:
                 raise NotImplementedError()
                 
         if assigning:
-            comment = f'{var.symbol} = {a} {op} {b}'
+            comment = f'{var.symbol} = {a}{b}{op}'
         else:
-            comment = f'{a+b+op} = {a} {op} {b}'
+            comment = f'x{reg} = {a}{b}{op}'
         
         if not self.is_int(a) and not self.is_int(b): # both in registers
             self.write(self.body, f'{instruction} x{reg}, x{self.reg_of(a)}, x{self.reg_of(b)}', comment)
@@ -286,3 +286,5 @@ class Compiler:
 if __name__ == '__main__':
     c = Compiler('example.ack')
     c.compile('example.s')
+    # c = Compiler(argv[1])
+    # c.compile(argv[2])
