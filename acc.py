@@ -245,16 +245,16 @@ class Compiler:
             else:
                 raise NotImplementedError()
         else: # both are literal
-            if instruction == 'sub': # special case for substitution
-                if (x := int(a) - int(b)) < 0:
-                    self.write(self.body, f'subi x{reg}, xzr, #{-x}', comment)
-                else:
-                    self.write(self.body, f'subi x{reg}, xzr, #{x}', comment)
-            elif instruction == 'add':
+            if instruction == 'add':
                 if (x := int(a) + int(b)) < 0:
                     self.write(self.body, f'subi x{reg}, xzr, #{-x}', comment)
                 else:
                     self.write(self.body, f'addi x{reg}, xzr, #{x}', comment)
+            elif instruction == 'sub':
+                if (x := int(a) - int(b)) < 0:
+                    self.write(self.body, f'addi x{reg}, xzr, #{-x}', comment)
+                else:
+                    self.write(self.body, f'subi x{reg}, xzr, #{x}', comment)
             elif instruction == 'mul':
                 if (x := int(a)) < 0:
                     self.write(self.body, f'subi x{reg}, xzr, #{-x}', f'x{reg} = {x}')
